@@ -197,16 +197,6 @@ See `examples/minimal_usage.py` for a runnable reconstruction example.
 
 ---
 
-## Citation
-
-If you use DGAD in published work, please cite the Graph Neural Diffusion paper that motivates the diffusion view:
-
-> Benjamin Chamberlain, James Rowbottom, Maria I. Gorinova, Michael Bronstein, Stefan Webb. *Graph Neural Diffusion.* ICML 2021. [arXiv:2106.10934](https://arxiv.org/abs/2106.10934)
-
-Add a citation for your own method or application as appropriate.
-
----
-
 ## License
 
 See `LICENSE` in this repository (to be added if not yet present).
