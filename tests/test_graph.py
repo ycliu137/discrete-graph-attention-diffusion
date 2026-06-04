@@ -52,6 +52,14 @@ def test_features_to_edge_index_knn_no_self_edge_dict_args():
     assert edge_index.shape[0] == 2
 
 
+def test_knn_graph_chunked_matches_full():
+    torch.manual_seed(0)
+    x = torch.randn(20, 8)
+    edge_full = knn_graph(x, k_min=0, k_max=5, self_edge=False)
+    edge_chunked = knn_graph(x, k_min=0, k_max=5, self_edge=False, chunk_size=7)
+    assert torch.equal(edge_full, edge_chunked)
+
+
 def test_edge_index_to_adj():
     edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]])
     adj = edge_index_to_adj(edge_index, num_nodes=3)
