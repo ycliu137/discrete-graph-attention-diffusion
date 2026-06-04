@@ -13,6 +13,18 @@ class InnerProductDecoder(nn.Module):
         self.dropout = dropout
         self.act = act if act is not None else (lambda x: x)
 
-    def forward(self, z):
+    def forward(self, z, edge_index=None):
+        """
+        Args:
+            z: (N, F) node embeddings
+            edge_index: optional (2, E); when set, return sparse (E,) edge logits
+
+        Returns:
+            Dense (N, N) logits if edge_index is None, else sparse (E,) logits.
+        """
         z = F.dropout(z, self.dropout, training=self.training)
-        return self.act(torch.mm(z, z.t()))
+        if edge_index is None:
+            return self.act(torch.mm(z, z.t()))
+        src, trg = edge_index[0], edge_index[1]
+        logits = (z[src] * z[trg]).sum(dim=-1)
+        return self.act(logits)

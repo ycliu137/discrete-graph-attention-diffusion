@@ -10,3 +10,14 @@ def edge_index_to_adj(edge_index, num_nodes):
     )
     adjacency[edge_index[0], edge_index[1]] = 1
     return adjacency
+
+
+def edge_index_labels(edge_index, dense_adj=None):
+    """Per-edge labels for sparse adjacency loss."""
+    if dense_adj is not None:
+        return dense_adj[edge_index[0], edge_index[1]]
+    return torch.ones(
+        edge_index.size(1),
+        dtype=torch.float32,
+        device=edge_index.device,
+    )

@@ -27,10 +27,12 @@ class DGADModel(nn.Module):
         encoder=None,
         decoder=None,
         edge_rewire=False,
+        sparse_adj_decoder=False,
     ):
         super().__init__()
         self.log_diffusion = log_diffusion
         self.diffusion_step_outputs = None
+        self.sparse_adj_decoder = sparse_adj_decoder
 
         self.diffusion = GND(
             num_features=num_features,
@@ -49,7 +51,10 @@ class DGADModel(nn.Module):
 
     def forward(self, data):
         (out_features, edge_index), last_embedding = self.diffusion(data)
-        recon_adj = self.adj_decoder(out_features)
+        decode_edges = None
+        if self.sparse_adj_decoder:
+            decode_edges = self.diffusion.gnd_layer.last_edge_index
+        recon_adj = self.adj_decoder(out_features, edge_index=decode_edges)
 
         if self.log_diffusion:
             self.diffusion_step_outputs = self.diffusion.diffusion_step_outputs

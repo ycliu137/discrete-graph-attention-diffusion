@@ -70,6 +70,8 @@ class GNDLayer(nn.Module):
         if self.log_attention_weights:
             self.attention_weights = attentions_per_edge
 
+        self.last_edge_index = edge_index
+
         if self.rebuild_graph:
             return out_features, rebuild_args
         return out_features, edge_index

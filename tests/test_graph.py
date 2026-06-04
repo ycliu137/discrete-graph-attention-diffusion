@@ -2,7 +2,7 @@
 
 import torch
 
-from dgad.graph.adjacency import edge_index_to_adj
+from dgad.graph.adjacency import edge_index_labels, edge_index_to_adj
 from dgad.graph.knn import (
     features_to_edge_index_knn_no_self_edge,
     knn_graph,
@@ -58,6 +58,15 @@ def test_knn_graph_chunked_matches_full():
     edge_full = knn_graph(x, k_min=0, k_max=5, self_edge=False)
     edge_chunked = knn_graph(x, k_min=0, k_max=5, self_edge=False, chunk_size=7)
     assert torch.equal(edge_full, edge_chunked)
+
+
+def test_edge_index_labels():
+    edge_index = torch.tensor([[0, 1], [1, 2]])
+    dense = torch.zeros(3, 3)
+    dense[0, 1] = 1.0
+    dense[1, 2] = 1.0
+    labels = edge_index_labels(edge_index, dense_adj=dense)
+    assert torch.equal(labels, torch.tensor([1.0, 1.0]))
 
 
 def test_edge_index_to_adj():
