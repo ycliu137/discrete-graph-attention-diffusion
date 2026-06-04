@@ -36,7 +36,7 @@ class AttentionDistance(nn.Module):
 
         edge_vectors, nodes_features_source = self._edge_vectors(nodes_features, edge_index)
         edge_vectors_weighted = edge_vectors * self.edge_dims_weights
-        edge_distance_vectors = edge_vectors_weighted * edge_vectors_weighted
+        edge_distance_vectors = torch.square(edge_vectors_weighted)
         edge_distances = (edge_distance_vectors * self.distance_dims_weights).sum(dim=-1)
 
         edge_distance_mean = edge_distances.mean(dim=0, keepdim=True)
