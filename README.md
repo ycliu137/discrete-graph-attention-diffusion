@@ -10,7 +10,7 @@
 
 DGAD is motivated by the view of graph neural networks as **diffusion processes** on node features—neighboring nodes exchange information until representations stabilize. That perspective is developed formally for **continuous-time** graph diffusion in [Graph Neural Diffusion](https://arxiv.org/abs/2106.10934) (Chamberlain et al.), where dynamics follow a differential equation and depth corresponds to integration time.
 
-DGAD takes the same smoothing intuition—**move each node toward an attention-weighted mixture of its neighbors**—but implements it as a **fixed number of explicit discrete steps** with a learnable step size \(\tau\). Attention defines who counts as a neighbor and with what weight; optional **dynamic rewiring** rebuilds edges from the current features between steps. The design keeps the feature dimension constant across all diffusion steps, following the dimension-preserving diffusion principle in the reference above.
+DGAD takes the same smoothing intuition—**move each node toward an attention-weighted mixture of its neighbors**—but implements it as a **fixed number of explicit discrete steps** with an adjustable step size \(\tau\). Attention defines who counts as a neighbor and with what weight; optional **dynamic rewiring** rebuilds edges from the current features between steps. The design keeps the feature dimension constant across all diffusion steps, following the dimension-preserving diffusion principle in the reference above.
 
 ---
 
