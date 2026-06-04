@@ -81,7 +81,7 @@ def fit_dgad(
 
     for epoch in range(max_epochs):
         model.train()
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         out_features, recon_adj, embedding = model(data)
 
@@ -96,7 +96,7 @@ def fit_dgad(
                 recon_adj, adj_targets, reduction=loss_reduction
             )
             loss_2 = F.mse_loss(out_features, target_features, reduction=loss_reduction)
-            fold = loss_1.item() / max(loss_2.item(), 1e-12)
+            fold = loss_1.detach() / loss_2.detach().clamp_min(1e-12)
             loss = loss_adj * loss_1 + (1.0 - loss_adj) * fold * loss_2
 
         loss.backward()

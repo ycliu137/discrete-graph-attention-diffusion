@@ -91,6 +91,30 @@ def test_fit_dgad_sparse_adj_loss(small_graph):
     assert len(result["loss_history"]) == 3
 
 
+def test_fit_dgad_mixed_loss(small_graph):
+    x, edge_index, n, f_in = small_graph
+    f_dif = 8
+    model = DGADModel(
+        num_features=f_dif,
+        num_heads=2,
+        num_steps=2,
+        encoder=[f_in, f_dif],
+        decoder=[f_dif, f_in],
+        sparse_adj_decoder=True,
+    )
+    result = fit_dgad(
+        model,
+        x,
+        edge_index=edge_index,
+        max_epochs=3,
+        lr=1e-2,
+        loss_adj=0.5,
+        device="cpu",
+        verbose=False,
+    )
+    assert len(result["loss_history"]) == 3
+
+
 def test_fit_dgad_requires_edge_index_when_not_rewiring():
     x = torch.randn(4, 8)
     model = DGADModel(num_features=8, num_heads=2, num_steps=1)
