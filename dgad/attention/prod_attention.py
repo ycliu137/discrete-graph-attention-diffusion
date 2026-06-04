@@ -37,12 +37,11 @@ class AttentionInnerProduct(nn.Module):
         nodes_features, edge_index = data
         num_of_nodes = nodes_features.shape[self.nodes_dim]
 
-        nodes_features_source, nodes_features_target = self._lift(nodes_features, edge_index)
-        nodes_features_target = nodes_features_target.view(-1, 1, self.num_features, 1)
-        nodes_features_target = (
-            self.metric_weights.matmul(nodes_features_target)
-            .view(-1, self.num_heads, self.num_features)
-        )
+        projected = self._project(nodes_features)
+        trg_index = edge_index[self.trg_nodes_dim]
+        src_index = edge_index[self.src_nodes_dim]
+        nodes_features_target = projected.index_select(self.nodes_dim, trg_index)
+        nodes_features_source = nodes_features.index_select(self.nodes_dim, src_index)
 
         edge_scores = (nodes_features_source * nodes_features_target).sum(dim=-1)
         edge_scores = self.leaky_relu(edge_scores)
@@ -51,9 +50,6 @@ class AttentionInnerProduct(nn.Module):
         )
         return attentions_per_edge, nodes_features_source
 
-    def _lift(self, nodes_features, edge_index):
-        src_index = edge_index[self.src_nodes_dim]
-        trg_index = edge_index[self.trg_nodes_dim]
-        sources = nodes_features.index_select(self.nodes_dim, src_index)
-        targets = nodes_features.index_select(self.nodes_dim, trg_index)
-        return sources, targets
+    def _project(self, nodes_features):
+        x = nodes_features.view(-1, 1, self.num_features, 1)
+        return self.metric_weights.matmul(x).view(-1, self.num_heads, self.num_features)
