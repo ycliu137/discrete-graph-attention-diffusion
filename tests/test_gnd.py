@@ -7,7 +7,7 @@ from dgad.diffusion.gnd import GND
 from dgad.diffusion.gnd_layer import GNDLayer
 
 
-@pytest.mark.parametrize("attention_type", ["sum", "prod", "dist"])
+@pytest.mark.parametrize("attention_type", ["sum", "prod", "dot", "dist"])
 def test_gnd_forward_fixed_graph(small_graph, attention_type):
     x, edge_index, n, f = small_graph
     gnd = GND(num_features=f, num_heads=2, num_steps=3, attention_type=attention_type)

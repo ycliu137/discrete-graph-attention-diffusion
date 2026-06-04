@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from dgad.attention.dist_attention import AttentionDistance
+from dgad.attention.dot_attention import AttentionDotProduct
 from dgad.attention.prod_attention import AttentionInnerProduct
 from dgad.attention.softmax import neighborhood_aware_softmax
 from dgad.attention.sum_attention import AttentionWeightSum
@@ -41,7 +42,10 @@ def test_attention_weight_sum_forward(small_graph):
     _attention_sums_to_one(attentions, edge_index, n)
 
 
-@pytest.mark.parametrize("attention_cls", [AttentionInnerProduct, AttentionDistance])
+@pytest.mark.parametrize(
+    "attention_cls",
+    [AttentionInnerProduct, AttentionDotProduct, AttentionDistance],
+)
 def test_attention_variants_forward(attention_cls, small_graph):
     x, edge_index, n, f = small_graph
     layer = attention_cls(f, num_heads=2)

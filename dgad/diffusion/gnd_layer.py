@@ -3,7 +3,12 @@
 import torch
 import torch.nn as nn
 
-from dgad.attention import AttentionWeightSum, AttentionInnerProduct, AttentionDistance
+from dgad.attention import (
+    AttentionWeightSum,
+    AttentionInnerProduct,
+    AttentionDotProduct,
+    AttentionDistance,
+)
 from dgad.attention.softmax import explicit_broadcast
 from dgad.graph.knn import features_to_edge_index_knn_no_self_edge
 
@@ -12,7 +17,7 @@ class GNDLayer(nn.Module):
     """
     One Euler step: x^{k+1} = tau * Agg(attn, x^k) + (1 - tau) * x^k.
 
-    Attention types: sum (GAT), prod (bilinear), dist (feature distance).
+    Attention types: sum (GAT), prod (bilinear), dot (Transformer), dist (feature distance).
     """
 
     src_nodes_dim = 1
@@ -94,8 +99,10 @@ class GNDLayer(nn.Module):
             return AttentionWeightSum(self.num_features, self.num_heads)
         if attention_type == "prod":
             return AttentionInnerProduct(self.num_features, self.num_heads)
+        if attention_type == "dot":
+            return AttentionDotProduct(self.num_features, self.num_heads)
         if attention_type == "dist":
             return AttentionDistance(self.num_features, self.num_heads)
         raise ValueError(
-            f'attention_type must be one of ("sum", "prod", "dist"), got "{attention_type}".'
+            f'attention_type must be one of ("sum", "prod", "dot", "dist"), got "{attention_type}".'
         )

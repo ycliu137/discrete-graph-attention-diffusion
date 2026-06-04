@@ -75,6 +75,12 @@ $$e_{ij} = \mathrm{LeakyReLU}(h_j^\top W_h h_i)$$
 
 Learnable \(F \times F\) matrix \(W_h\) per head (target side projected). Richer interactions (\(\approx HF^2\) parameters).
 
+### `dot` — scaled dot-product edge scores
+
+$$e_{ij} = \frac{(Q h_i)^\top (K h_j)}{\sqrt{F}}$$
+
+Separate learnable query and key projections \(Q, K \in \mathbb{R}^{F \times F}\) per head (Vaswani et al., 2017). Unlike `prod`, both sides are projected; scores are scaled before softmax without LeakyReLU.
+
 ### `dist` — distance-based edge scores
 
 Scores from weighted squared differences along edges, with learnable per-dimension weights. Favors neighbors that are close in a learned feature metric.
@@ -89,7 +95,7 @@ Messages always use **source node features** (after attention weighting); there 
 DGAD/
 ├── dgad/
 │   ├── diffusion/       # GND, GNDLayer
-│   ├── attention/       # sum, prod, dist + neighborhood softmax
+│   ├── attention/       # sum, prod, dot, dist + neighborhood softmax
 │   ├── graph/           # KNN and adjacency helpers
 │   ├── models/          # DGADModel, encoders, inner-product decoder
 │   └── training/        # fit_dgad
@@ -192,7 +198,7 @@ See `examples/minimal_usage.py` for a runnable reconstruction example.
 | `time_increment` | Step size \(\tau\) | `0.2` |
 | `num_features` | Diffusion feature dim \(F\) | required |
 | `num_heads` | Attention heads | `8` |
-| `attention_type` | `sum` / `prod` / `dist` | `sum` |
+| `attention_type` | `sum` / `prod` / `dot` / `dist` | `sum` |
 | `edge_rewire` | Rebuild KNN every step | `False` |
 
 ---
