@@ -100,6 +100,9 @@ DGAD/
 │   ├── models/          # DGADModel, encoders, inner-product decoder
 │   └── training/        # fit_dgad
 ├── examples/
+│   ├── minimal_usage.py              # self-supervised reconstruction
+│   ├── pyg_node_classification.py  # PyG single-graph classification
+│   └── pyg_multi_graph_sketch.py     # PyG DataLoader, one graph per step
 └── README.md
 ```
 
@@ -113,6 +116,14 @@ pip install -e .
 ```
 
 Requires `torch>=2.0`.
+
+**Optional — PyTorch Geometric examples**
+
+```bash
+pip install -e ".[pyg]"
+```
+
+PyG may require a [wheel matched to your PyTorch/CUDA version](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html). If `pip install torch-geometric` fails, follow those instructions first, then install DGAD with the `pyg` extra.
 
 ---
 
@@ -177,6 +188,34 @@ fit_dgad(
 ```
 
 See `examples/minimal_usage.py` for a runnable reconstruction example.
+
+### PyTorch Geometric integration
+
+DGAD core accepts plain `(x, edge_index)` tensors—the same layout PyG `Data` objects use. No changes to `GND` / `GNDLayer` are required; examples show how to plug PyG datasets and loaders into your own training loop.
+
+| Example | What it shows |
+|---------|----------------|
+| `examples/pyg_node_classification.py` | **Single graph** (Cora): full-batch node classification with `GND` + linear head |
+| `examples/pyg_multi_graph_sketch.py` | **Multiple graphs** (MUTAG): `DataLoader` with `batch_size=1`, mean-pool node embeddings for graph labels |
+
+```bash
+python examples/pyg_node_classification.py
+python examples/pyg_multi_graph_sketch.py
+```
+
+**Single graph (typical citation network):** pass PyG fields directly:
+
+```python
+from dgad import GND
+
+gnd = GND(num_features=32, num_steps=8, encoder=[data.num_features, 32])
+(_, _), z = gnd((data.x, data.edge_index))
+loss = F.cross_entropy(z[data.train_mask], data.y[data.train_mask])
+```
+
+**Multiple graphs:** loop the loader (or use `batch_size=1` as in the sketch). A single forward over a PyG `Batch` of variable-size graphs needs offset/`ptr` handling—that belongs in a separate integration package, not in core DGAD.
+
+**Large graphs:** for neighbor sampling or subgraph mini-batches, use PyG loaders (`NeighborLoader`, etc.) to build each `(x, edge_index)` subgraph, then call `GND` on that subgraph—the backbone stays the same.
 
 ---
 
