@@ -1,4 +1,4 @@
-"""Adjacency reconstruction decoder (VGAE-style)."""
+"""Inner-product adjacency reconstruction decoder."""
 
 import torch
 import torch.nn as nn

@@ -1,4 +1,4 @@
-"""GAT-style additive attention (attention_type='sum')."""
+"""Additive edge attention (attention_type='sum')."""
 
 import torch
 import torch.nn as nn
@@ -10,7 +10,7 @@ class AttentionWeightSum(nn.Module):
     """
     Additive attention: e_ij = LeakyReLU(a_s^T h_j + a_t^T h_i).
 
-    Same formulation as GAT (Veličković et al., 2017).
+    Learnable source and target scoring vectors per attention head.
     """
 
     src_nodes_dim = 1

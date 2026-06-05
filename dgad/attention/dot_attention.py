@@ -1,4 +1,4 @@
-"""Transformer-style scaled dot-product attention (attention_type='dot')."""
+"""Scaled dot-product edge attention (attention_type='dot')."""
 
 import math
 
@@ -12,8 +12,8 @@ class AttentionDotProduct(nn.Module):
     """
     Scaled dot-product attention: e_ij = (Q h_i)^T (K h_j) / sqrt(d).
 
-    Both target (query) and source (key) nodes are linearly projected, following
-    Vaswani et al. (2017). Unlike ``prod``, projections are separate for Q and K.
+    Separate learnable query and key projections per head. Unlike ``prod``,
+    both sides are projected before the inner product.
     """
 
     src_nodes_dim = 1

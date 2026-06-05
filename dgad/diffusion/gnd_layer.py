@@ -17,7 +17,7 @@ class GNDLayer(nn.Module):
     """
     One Euler step: x^{k+1} = tau * Agg(attn, x^k) + (1 - tau) * x^k.
 
-    Attention types: sum (GAT), prod (bilinear), dot (Transformer), dist (feature distance).
+    Attention types: sum (additive), prod (bilinear), dot (scaled dot-product), dist (feature distance).
     """
 
     src_nodes_dim = 1

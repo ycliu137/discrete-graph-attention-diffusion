@@ -1,9 +1,8 @@
 """
 Discrete Graph Attention Diffusion (DGAD / GND).
 
-Fixed K-step explicit diffusion inspired by Graph Neural Diffusion (Chamberlain et al.,
-arXiv:2106.10934), implemented as discrete Euler iterations with attention-weighted
-neighborhood aggregation rather than continuous ODE integration.
+Fixed K-step explicit diffusion with attention-weighted neighborhood aggregation
+and discrete Euler-style propagation steps.
 """
 
 import torch

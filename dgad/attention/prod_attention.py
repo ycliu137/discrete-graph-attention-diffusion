@@ -10,8 +10,7 @@ class AttentionInnerProduct(nn.Module):
     """
     Bilinear attention: e_ij = LeakyReLU(h_j^T W_h h_i).
 
-    Sparse-graph variant inspired by Transformer dot-product attention (Vaswani et al., 2017).
-    Only the target side is projected by W_h (asymmetric).
+    Asymmetric form: only the target node is projected by W_h per head.
     """
 
     src_nodes_dim = 1

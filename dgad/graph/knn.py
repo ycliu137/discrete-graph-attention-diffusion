@@ -16,7 +16,7 @@ def knn_graph(
 
     Args:
         feature_matrix: (N, F) node features
-        k_min, k_max: neighbor rank range (exclusive upper bound style as in CellDiffusion)
+        k_min, k_max: neighbor rank range (0 = nearest; upper slice bound is exclusive)
         self_edge: include self-loops when True
         remov_edge_prob: if set, randomly drop edges with this probability
         chunk_size: if set, compute distances in row chunks to reduce peak memory
@@ -64,7 +64,7 @@ def _knn_indices_chunked(feature_matrix, k_min, k_max, self_edge, chunk_size):
 
 
 def knn_indices_to_edge_index(knn_indices):
-    """Convert (N, k) neighbor indices to PyG-style edge_index (2, N*k)."""
+    """Convert (N, k) neighbor indices to COO edge_index (2, N*k)."""
     num_points, k = knn_indices.shape
     src_nodes = torch.arange(num_points, device=knn_indices.device).repeat_interleave(k)
     trg_nodes = knn_indices.reshape(-1)
