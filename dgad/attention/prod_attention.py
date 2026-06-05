@@ -1,4 +1,9 @@
-"""Bilinear / inner-product attention (attention_type='prod')."""
+"""Bilinear / inner-product attention (attention_type='prod').
+
+Reference: Vaswani et al., Attention Is All You Need, NeurIPS 2017 (dot-product
+form); DGAD uses asymmetric target-only projection on sparse edges.
+https://arxiv.org/abs/1706.03762
+"""
 
 import torch
 import torch.nn as nn
@@ -11,6 +16,9 @@ class AttentionInnerProduct(nn.Module):
     Bilinear attention: e_ij = LeakyReLU(h_j^T W_h h_i).
 
     Asymmetric form: only the target node is projected by W_h per head.
+
+    Reference: Vaswani et al., Attention Is All You Need, NeurIPS 2017;
+    sparse-graph variant with target-only projection.
     """
 
     src_nodes_dim = 1

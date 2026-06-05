@@ -1,4 +1,8 @@
-"""Scaled dot-product edge attention (attention_type='dot')."""
+"""Scaled dot-product edge attention (attention_type='dot').
+
+Reference: Vaswani et al., Attention Is All You Need, NeurIPS 2017.
+https://arxiv.org/abs/1706.03762
+"""
 
 import math
 
@@ -14,6 +18,8 @@ class AttentionDotProduct(nn.Module):
 
     Separate learnable query and key projections per head. Unlike ``prod``,
     both sides are projected before the inner product.
+
+    Reference: Vaswani et al., Attention Is All You Need, NeurIPS 2017.
     """
 
     src_nodes_dim = 1

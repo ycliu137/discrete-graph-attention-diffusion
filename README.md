@@ -63,27 +63,42 @@ flowchart LR
 
 All types share the same pipeline after scoring: **neighborhood softmax → weighted aggregation → propagate**. Set `attention_type` to one of:
 
+| Type | Edge score (per head) | Primary reference |
+|------|------------------------|-------------------|
+| `sum` | \(\mathrm{LeakyReLU}(a_s^\top h_j + a_t^\top h_i)\) | [Graph Attention Networks](https://arxiv.org/abs/1710.10903) (Veličković et al., ICLR 2018) |
+| `prod` | \(\mathrm{LeakyReLU}(h_j^\top W_h h_i)\) | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) (Vaswani et al., NeurIPS 2017); asymmetric target-only projection in DGAD |
+| `dot` | \((Q h_i)^\top (K h_j) / \sqrt{F}\) | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) (Vaswani et al., NeurIPS 2017) |
+| `dist` | Learned weighted distance on \(h_i - h_j\) | DGAD distance-based edge scoring (see below) |
+
 ### `sum` — additive edge scores
 
 $$e_{ij} = \mathrm{LeakyReLU}(a_s^\top h_j + a_t^\top h_i)$$
 
 Learnable vectors \(a_s, a_t\) per head. Lightweight (\(\approx 2HF\) parameters); good default for smaller graphs.
 
+**Reference:** Veličković, P., Cucurull, G., Casanova, A., Romero, A., Liò, P., & Bengio, Y. *Graph Attention Networks.* ICLR 2018. [arXiv:1710.10903](https://arxiv.org/abs/1710.10903)
+
 ### `prod` — bilinear edge scores
 
 $$e_{ij} = \mathrm{LeakyReLU}(h_j^\top W_h h_i)$$
 
-Learnable \(F \times F\) matrix \(W_h\) per head (target side projected). Richer interactions (\(\approx HF^2\) parameters).
+Learnable \(F \times F\) matrix \(W_h\) per head (target side projected). Richer interactions (\(\approx HF^2\) parameters). Same inner-product scoring idea as Transformer attention, but on sparse edges with **asymmetric** projection (only the target node is mapped by \(W_h\)) and LeakyReLU before softmax.
+
+**Reference:** Vaswani, A., et al. *Attention Is All You Need.* NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762) — bilinear/dot-product form; DGAD implements a sparse-graph, target-only variant.
 
 ### `dot` — scaled dot-product edge scores
 
 $$e_{ij} = \frac{(Q h_i)^\top (K h_j)}{\sqrt{F}}$$
 
-Separate learnable query and key projections \(Q, K \in \mathbb{R}^{F \times F}\) per head (Vaswani et al., 2017). Unlike `prod`, both sides are projected; scores are scaled before softmax without LeakyReLU.
+Separate learnable query and key projections \(Q, K \in \mathbb{R}^{F \times F}\) per head. Unlike `prod`, both sides are projected; scores are scaled before softmax without LeakyReLU.
+
+**Reference:** Vaswani, A., et al. *Attention Is All You Need.* NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
 
 ### `dist` — distance-based edge scores
 
-Scores from weighted squared differences along edges, with learnable per-dimension weights. Favors neighbors that are close in a learned feature metric.
+Scores from weighted squared differences along edges, with learnable per-dimension weights on the edge vector and on the squared terms. Lower distance yields higher attention after neighborhood softmax. Favors neighbors that are close in a learned feature metric.
+
+**Reference:** DGAD-specific scoring (no single external paper); motivated by attention from feature-space proximity on graph edges.
 
 Messages always use **source node features** (after attention weighting); there is no separate value projection.
 

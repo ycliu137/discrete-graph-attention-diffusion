@@ -1,4 +1,8 @@
-"""Additive edge attention (attention_type='sum')."""
+"""Additive edge attention (attention_type='sum').
+
+Reference: Veličković et al., Graph Attention Networks, ICLR 2018.
+https://arxiv.org/abs/1710.10903
+"""
 
 import torch
 import torch.nn as nn
@@ -11,6 +15,8 @@ class AttentionWeightSum(nn.Module):
     Additive attention: e_ij = LeakyReLU(a_s^T h_j + a_t^T h_i).
 
     Learnable source and target scoring vectors per attention head.
+
+    Reference: Veličković et al., Graph Attention Networks, ICLR 2018.
     """
 
     src_nodes_dim = 1

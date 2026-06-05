@@ -1,4 +1,8 @@
-"""Distance-based attention (attention_type='dist')."""
+"""Distance-based attention (attention_type='dist').
+
+DGAD-specific edge scoring from learned weighted feature-space distance.
+See README "Attention types" for the formula and discussion.
+"""
 
 import torch
 import torch.nn as nn
@@ -10,7 +14,9 @@ class AttentionDistance(nn.Module):
     """
     Attention from weighted feature-space distance between neighbors.
 
-    e_ij derived from ||W_e (h_i - h_j)|| with learnable dimension weights.
+    e_ij derived from weighted squared differences of (h_target - h_source).
+
+    Reference: DGAD distance-based edge scoring (see README).
     """
 
     src_nodes_dim = 1
