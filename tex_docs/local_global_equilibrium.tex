@@ -1,0 +1,452 @@
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{enumitem}
+
+\geometry{margin=1in}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{Local and Global Equilibrium Effects\\in Discrete Graph Attention Diffusion (DGAD)}
+\author{DGAD Discussion Notes}
+\date{June 2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+%==============================================================================
+\chapter{Introduction}
+%==============================================================================
+
+Discrete Graph Attention Diffusion (DGAD) iteratively smooths node features on a graph by moving each node toward an attention-weighted mixture of its neighbors. A single diffusion step in \texttt{GNDLayer} takes the form
+\begin{equation}
+    x_i^{(k+1)} = (1-\tau)\, x_i^{(k)} + \tau \sum_{j \in \mathcal{N}(i)} \alpha_{ij}^{(k)}\, x_j^{(k)},
+    \label{eq:node-tau}
+\end{equation}
+where $\tau$ is the scalar \texttt{time\_increment} (default $0.2$), and $\alpha_{ij}$ are neighborhood-normalized attention weights. Stacking $K$ such steps (\texttt{num\_steps}) yields final node embeddings suitable for classification, clustering, and other downstream tasks.
+
+A recurring phenomenon in this process is the coexistence of \textbf{local} and \textbf{global equilibrium effects} in node embeddings. This document collects two complementary interpretations of that phenomenon, discusses how to exploit the trade-off for community separation, surveys methods for designing per-edge step sizes $\tau_{ij}$, and finally proposes a KNN-specific construction based on reverse-degree asymmetry.
+
+%==============================================================================
+\chapter{Equilibrium Effects in DGAD}
+%==============================================================================
+
+\section{The Core Mechanism}
+
+Each diffusion step balances two forces:
+\begin{itemize}[noitemsep]
+    \item \textbf{Retention}: the term $(1-\tau)\, x_i^{(k)}$ preserves the node's current identity;
+    \item \textbf{Mixing}: the term $\tau \sum_j \alpha_{ij} x_j^{(k)}$ pulls the node toward its attention-weighted neighborhood aggregate.
+\end{itemize}
+
+At a \emph{fixed point} (equilibrium) for node $i$, assuming $\tau > 0$,
+\begin{equation}
+    x_i = \sum_{j \in \mathcal{N}(i)} \alpha_{ij}\, x_j.
+    \label{eq:local-fixed-point}
+\end{equation}
+The embedding equals the attention-weighted average of its neighbors. How one labels this ``local'' versus ``global'' depends on the scale at which equilibrium is observed.
+
+\section{Interpretation I: Topology and Hop Count}
+
+\subsection{Local Equilibrium (One-Hop Scale)}
+
+\textbf{Local equilibrium} refers to the per-node, per-step attractor defined by Equation~\eqref{eq:local-fixed-point}. Within a single step, each node moves toward consensus with its immediate neighbors only. The step size $\tau$ controls how far the node travels in one update:
+\begin{itemize}[noitemsep]
+    \item small $\tau$: embeddings retain individual structure longer;
+    \item large $\tau$: faster convergence to the one-hop neighbor mixture.
+\end{itemize}
+
+Attention determines \emph{which} neighbors matter and \emph{how much}; it shapes the local attractor itself rather than applying uniform averaging.
+
+\subsection{Global Equilibrium (Multi-Hop Scale)}
+
+\textbf{Global equilibrium} emerges after $K$ repeated local updates. Although each step mixes only one-hop neighbors, information propagates across the graph over multiple steps---analogous to the continuous-time dynamics
+\begin{equation}
+    \frac{dx}{dt} = \mathrm{Agg}(x) - x,
+\end{equation}
+whose long-time behavior drives connected components toward graph-wide harmonization (the familiar oversmoothing limit).
+
+\subsection{Correspondence Between Scales}
+
+\begin{table}[h]
+\centering
+\caption{Two temporal--spatial scales of equilibrium.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Aspect} & \textbf{Local} & \textbf{Global} \\
+\midrule
+Spatial scope   & 1-hop neighborhood        & Multi-hop / full graph \\
+Temporal scope  & Single step               & Accumulated over $K$ steps \\
+Manifestation   & Node individuality vs.\ neighbors & Distant nodes influence one another \\
+Control knobs   & $\tau$ (per-step mixing)  & $K$ (\texttt{num\_steps}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Default settings ($\tau = 0.2$, $K = 8$) strike a practical balance: enough local smoothing without immediate global collapse.
+
+\section{Interpretation II: Community Structure}
+
+\subsection{Local Equilibrium Within Communities}
+
+On graphs with community structure, an alternative and often more task-relevant reading applies:
+\begin{itemize}[noitemsep]
+    \item \textbf{Local equilibrium} = equilibrium \emph{within} a community $C$.
+\end{itemize}
+
+Inside $C$, edges are dense, features are homophilous, and attention softmax is dominated by intra-community neighbors. After a few diffusion steps, nodes in $C$ converge toward a \textbf{community-specific consensus}---similar embeddings inside $C$, while distinct communities remain separable. This occurs on a \emph{short} diffusion time scale because information circulates primarily within $C$.
+
+\subsection{Global Equilibrium Between Communities}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Global equilibrium} = equilibrium \emph{between} communities.
+\end{itemize}
+
+Inter-community edges are sparse; bridge and boundary nodes mediate cross-community flow. Cross-community neighbors receive lower attention mass, so inter-community information exchange is slow and requires more steps. Global equilibrium means community-level representations settle into a coordinated graph-wide configuration---not necessarily identical vectors, but stable relative positions across communities.
+
+\subsection{Why DGAD Exhibits Both Scales}
+
+The update in Equation~\eqref{eq:node-tau} naturally splits edges into two regimes:
+
+\begin{table}[h]
+\centering
+\caption{Edge regimes under community structure.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Connection} & \textbf{Attention pattern} & \textbf{Equilibration speed} \\
+\midrule
+Intra-community $(i,j \in C)$ & Large weights, many competing neighbors & Fast $\to$ \textbf{local equilibrium} \\
+Inter-community $(i \in C,\, j \in C')$ & Small weights, few channels & Slow $\to$ \textbf{global equilibrium} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Diffusion is therefore \textbf{multi-scale}:
+\begin{quote}
+\emph{Few steps} $\Rightarrow$ communities equilibrate internally; inter-community coupling remains weak.\\
+\emph{Many steps} $\Rightarrow$ intra-community states are stable; cross-community alignment accelerates.
+\end{quote}
+
+\subsection{Unifying the Two Interpretations}
+
+On community-structured graphs, the hop-count and community views largely coincide: one-hop mixing predominantly occurs inside communities, while multi-hop propagation is required for sustained inter-community coupling. The community interpretation explains \emph{why} two time scales appear---because the graph itself is heterogeneous---not merely because step count is large.
+
+%==============================================================================
+\chapter{Promoting Local Equilibrium, Slowing Global Equilibrium}
+%==============================================================================
+
+\section{Principle for Community Separation}
+
+To better \textbf{distinguish communities}, one should:
+\begin{itemize}[noitemsep]
+    \item \textbf{Promote local equilibrium}: encourage fast intra-community consensus (tight, coherent clusters);
+    \item \textbf{Slow global equilibrium}: limit cross-community homogenization (preserve boundaries).
+\end{itemize}
+
+The desirable operating point is often: \emph{intra-community equilibrium has been reached, but inter-community equilibrium has not}.
+
+\section{Hyperparameter Guidance}
+
+Equation~\eqref{eq:node-tau} offers two primary global knobs:
+
+\begin{table}[h]
+\centering
+\caption{Global controls for the local/global trade-off.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Goal} & \textbf{Direction} & \textbf{Parameter} \\
+\midrule
+Promote local equilibrium   & Strengthen intra-community mixing (moderately) & $\tau$ (\texttt{time\_increment}) \\
+Slow global equilibrium     & Limit cross-community propagation            & $K$ (\texttt{num\_steps}), or reduce $\tau$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Caveat on $\tau$.}
+Very large $\tau$ accelerates \emph{both} local and global equilibration and can cause oversmoothing. A robust strategy is:
+\begin{enumerate}[noitemsep]
+    \item \textbf{Control $K$ first}---the most direct lever on global reach;
+    \item \textbf{Tune $\tau$ moderately} in combination with $K$;
+    \item \textbf{Prefer fixed topology} (\texttt{edge\_rewire=False}) when the input graph already encodes sparse cross-community links;
+    \item \textbf{Use distance-based attention} (\texttt{attention\_type="dist"}) to up-weight similar neighbors and down-weight dissimilar ones, biasing toward ``fast local, slow global'' behavior when inter-community feature gaps are large.
+\end{enumerate}
+
+\section{Practical Regimes}
+
+\begin{table}[h]
+\centering
+\caption{Qualitative regimes.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Setting} & \textbf{Outcome} \\
+\midrule
+Small $K$ + moderate $\tau$ & Local equilibrium inside communities; global equilibrium delayed --- \textbf{favorable for community resolution} \\
+Large $K$ + large $\tau$       & Both equilibria advance; oversmoothing --- \textbf{communities hard to separate} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Downstream Task Implications}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Unsupervised clustering}: the ``local yes, global not yet'' window often aligns with better cluster structure.
+    \item \textbf{Node classification}: intra-community smoothing supports label consistency; preserving inter-community differences retains class boundaries.
+    \item \textbf{Over-diffusion}: performance can degrade not from insufficient smoothing, but from \emph{excessive global equilibrium} that erases discriminative structure.
+\end{itemize}
+
+%==============================================================================
+\chapter{Per-Edge Step Sizes \texorpdfstring{$\tau_{ij}$}{tau\_ij}}
+%==============================================================================
+
+\section{From Scalar to Per-Edge \texorpdfstring{$\tau$}{tau}}
+
+The README describes a single adjustable step size $\tau$ per node update. A natural extension assigns a distinct $\tau_{ij}$ to each directed edge $(j \to i)$, yielding the edge-wise incremental form
+\begin{equation}
+    x_i^{(k+1)} = x_i^{(k)} + \sum_{j \in \mathcal{N}(i)} \alpha_{ij}\, \tau_{ij}\, \bigl(x_j^{(k)} - x_i^{(k)}\bigr).
+    \label{eq:edge-tau}
+\end{equation}
+
+Interpretation:
+\begin{itemize}[noitemsep]
+    \item large $\tau_{ij}$: node $i$ mixes rapidly along edge $(j \to i)$;
+    \item small $\tau_{ij}$: that edge contributes little cross-node drift.
+\end{itemize}
+
+Constraint: $\tau_{ij} \in [0,1]$. Optionally enforce a per-node budget $\sum_j \alpha_{ij}\tau_{ij} \le \tau_{\max}$ for stability.
+
+\paragraph{Implementation note.}
+In the current \texttt{GNDLayer}, \texttt{time\_increment} is applied \emph{after} neighborhood aggregation at the node level. True per-edge $\tau_{ij}$ should enter the weighted aggregation, e.g.,
+\begin{verbatim}
+weighted = nodes_features_source * attentions_per_edge * tau_per_edge
+\end{verbatim}
+with node-level propagate optionally reduced to a pure residual or $\tau_i \equiv 1$.
+
+\section{Design Methods}
+
+\subsection{Community Priors (Labels or Detected Communities)}
+
+When communities $c_i$ are known or estimated (Louvain, Leiden, spectral clustering):
+\begin{equation}
+    \tau_{ij} =
+    \begin{cases}
+        \tau_{\mathrm{in}}  & \text{if } c_i = c_j, \\
+        \tau_{\mathrm{out}} & \text{if } c_i \neq c_j,
+    \end{cases}
+    \qquad \tau_{\mathrm{in}} \gg \tau_{\mathrm{out}}.
+\end{equation}
+Example: $\tau_{\mathrm{in}} \in [0.3, 0.5]$, $\tau_{\mathrm{out}} \in [0.01, 0.05]$.
+
+\subsection{Structural Heuristics (No Labels)}
+
+\begin{table}[h]
+\centering
+\caption{Topology-based signals for $\tau_{ij}$.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Signal} & \textbf{Rule of thumb} & \textbf{Rationale} \\
+\midrule
+Common neighbors / Jaccard & $\tau_{ij} \propto \mathrm{Jaccard}(i,j)$ & Shared neighborhood $\Rightarrow$ same community \\
+Edge betweenness            & $\tau_{ij} \propto 1 - \mathrm{norm}(\mathrm{betweenness}_{ij})$ & Bridges get small $\tau$ \\
+Effective resistance        & $\tau_{ij} \propto \exp(-R_{ij}/T)$ & Graphically distant pairs mix slowly \\
+Conductance / cut edges     & Small $\tau$ on cross-cut edges         & Direct community-boundary control \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A practical template:
+\begin{equation}
+    \tau_{ij} = \tau_{\min} + (\tau_{\max}-\tau_{\min})\cdot \sigma\!\left(\frac{\mathrm{CN}_{ij}-\mu}{\sigma}\right),
+\end{equation}
+where $\mathrm{CN}_{ij}$ is the common-neighbor count.
+
+\subsection{Feature Homophily}
+
+Align with DGAD's feature-space view:
+\begin{equation}
+    \tau_{ij} = \tau_{\max}\cdot \exp\!\left(-\frac{\|x_i - x_j\|^2}{T}\right).
+\end{equation}
+Use initial features $x^{(0)}$ for a fixed $\tau_{ij}$, or current $x^{(k)}$ for dynamic $\tau$. Attention $\alpha_{ij}$ can govern \emph{who} to listen to; $\tau_{ij}$ governs \emph{how fast} to diffuse along each edge.
+
+\subsection{Decoupling from Attention}
+
+To avoid double amplification on already-strong edges:
+\begin{equation}
+    \tau_{ij} = \tau_{\mathrm{base}} \cdot f_{ij}, \quad f_{ij} \in [0,1],
+\end{equation}
+where $f_{ij}$ comes from structure or features, not directly from $\alpha_{ij}$. A per-node budget normalization is also possible:
+\begin{equation}
+    \tau_{ij} = \tau_{\max}\cdot \frac{f_{ij}}{\sum_{j'} \alpha_{ij'} f_{ij'}}\cdot \alpha_{ij}.
+\end{equation}
+
+\subsection{Learnable \texorpdfstring{$\tau_{ij}$}{tau\_ij}}
+
+For end-to-end training:
+\begin{equation}
+    \tau_{ij} = \sigma\!\left(w^\top [h_i \| h_j \| e_{ij}] + b\right).
+\end{equation}
+Regularize large $\tau$ on predicted bridge edges, or distill from heuristic teachers $f_{ij}$.
+
+\subsection{Step Schedule (Orthogonal but Complementary)}
+
+Even with fixed $\tau_{ij}$, decay over steps slows late-stage global mixing:
+\begin{equation}
+    \tau_{ij}^{(k)} = \tau_{ij}\cdot \gamma^k, \quad \gamma < 1.
+\end{equation}
+
+\section{Recommended Progression}
+
+\begin{enumerate}
+    \item Fixed graph + Louvain communities: $\tau_{\mathrm{in}}=0.4$, $\tau_{\mathrm{out}}=0.02$.
+    \item No community labels: $\tau_{ij} \propto \mathrm{Jaccard}(i,j)$ or $\exp(-\|x_i-x_j\|^2/T)$.
+    \item Joint with attention: $\alpha$ for weights, $\tau$ for rates; cap inter-community $\tau$ aggressively.
+    \item Supervised tasks: learnable $\tau$ with bridge regularization.
+\end{enumerate}
+
+Monitor:
+\begin{itemize}[noitemsep]
+    \item \textbf{Local signal}: rising cosine similarity \emph{within} communities;
+    \item \textbf{Global signal}: \emph{between}-community similarity stays low or rises slowly.
+\end{itemize}
+
+\section{Comparison with Global \texorpdfstring{$\tau$}{tau}}
+
+\begin{table}[h]
+\centering
+\caption{Global vs.\ per-edge step sizes.}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Method} & \textbf{Promote local} & \textbf{Slow global} & \textbf{Cost} \\
+\midrule
+Reduce $K$           & medium & strong & risk of under-smoothing \\
+Reduce global $\tau$ & weak   & strong & slows intra-community mixing too \\
+\textbf{Per-edge $\tau_{ij}$} & \textbf{strong} & \textbf{strong} & $O(|E|)$ storage/compute \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Per-edge $\tau$ allows large steps on intra-community edges and small steps on inter-community edges simultaneously---avoiding a single global $\tau$ that sacrifices one scale for the other.
+
+%==============================================================================
+\chapter{\texorpdfstring{$\tau_{ij}$}{tau\_ij} from KNN Graph Asymmetry}
+%==============================================================================
+
+\section{Asymmetry in Feature-Space KNN Graphs}
+
+When building graphs via \texttt{knn\_graph}, each node $i$ selects $k$ nearest neighbors in feature space, creating directed edges $i \to j$. In \texttt{GNDLayer}, \texttt{edge\_index[0]} is the aggregation target, so node $i$ receives messages from its chosen neighbors.
+
+Two degree quantities differ:
+
+\begin{table}[h]
+\centering
+\caption{KNN degree asymmetry (aggregation convention).}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Quantity} & \textbf{Meaning} & \textbf{On KNN graphs} \\
+\midrule
+In-degree (aggregation) $d^{\mathrm{in}}_i$ & Edges for which $i$ is the target & \textbf{Fixed $\approx k$} \\
+Reverse degree $d^{\mathrm{rev}}_j$ & Count of nodes that select $j$ as a neighbor & \textbf{Varies with local density} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+High $d^{\mathrm{rev}}_j$ indicates that $j$ lies in a dense region of feature space (many points include $j$ in their KNN list). Low $d^{\mathrm{rev}}_j$ suggests peripheral, isolated, or boundary locations. This asymmetry is a free structural signal for designing $\tau_{ij}$ without community labels.
+
+\section{Proposed Formulas}
+
+For edge $(i \leftarrow j)$ (node $i$ receives from neighbor $j$):
+\begin{equation}
+    \tau_{ij} = \tau_{\min} + (\tau_{\max}-\tau_{\min})\cdot g\!\left(d^{\mathrm{rev}}_i,\, d^{\mathrm{rev}}_j\right).
+\end{equation}
+
+\subsection{Scheme 1: Source Density}
+
+\begin{equation}
+    g = \frac{d^{\mathrm{rev}}_j - d_{\min}}{d_{\max} - d_{\min}}.
+\end{equation}
+Messages from dense-region nodes diffuse faster.
+
+\subsection{Scheme 2: Co-Density (Conservative)}
+
+\begin{equation}
+    g = \min\!\left(\frac{d^{\mathrm{rev}}_i}{d_{\max}},\, \frac{d^{\mathrm{rev}}_j}{d_{\max}}\right).
+\end{equation}
+Large $\tau$ only when \emph{both} endpoints are dense---boundary edges are automatically suppressed.
+
+\subsection{Scheme 3: Density Similarity}
+
+\begin{equation}
+    g = \exp\!\left(-\frac{\bigl|d^{\mathrm{rev}}_i - d^{\mathrm{rev}}_j\bigr|^2}{T}\right).
+\end{equation}
+Similar reverse degrees (typical intra-community pairs) receive large $\tau$; mismatched pairs (dense core to sparse periphery) receive small $\tau$.
+
+\subsection{Scheme 4: Mutual KNN + Co-Density (Recommended)}
+
+Cross-community edges in asymmetric KNN are often \textbf{one-way}; intra-community edges are more often \textbf{mutual}:
+\begin{equation}
+    \tau_{ij} = \tau_{\max}\cdot \mathbb{1}[i \in \mathrm{KNN}(j)]\cdot \frac{\sqrt{d^{\mathrm{rev}}_i \cdot d^{\mathrm{rev}}_j}}{d_{\max}}.
+\end{equation}
+
+\begin{itemize}[noitemsep]
+    \item mutual + high reverse degree $\Rightarrow$ large $\tau$: fast \textbf{local} equilibration inside dense communities;
+    \item non-mutual or low density $\Rightarrow$ small $\tau$: slow \textbf{global} coupling.
+\end{itemize}
+
+\section{Integration with Diffusion}
+
+Substitute $\tau_{ij}$ into Equation~\eqref{eq:edge-tau}. Precompute $d^{\mathrm{rev}}$ from \texttt{edge\_index} in $O(|E|)$ once per graph build. When \texttt{edge\_rewire=True}, recompute after each KNN reconstruction.
+
+\section{Qualitative Picture}
+
+\begin{quote}
+\emph{Dense community interior}: high $d^{\mathrm{rev}}$ $\Rightarrow$ large $\tau$ $\Rightarrow$ fast local equilibrium.\\
+\emph{Boundaries and bridges}: low or asymmetric $d^{\mathrm{rev}}$ $\Rightarrow$ small $\tau$ $\Rightarrow$ delayed global equilibrium.
+\end{quote}
+
+Per-edge diffusion rates follow the geometric role of each KNN edge rather than a single global step size.
+
+\section{Caveats and Limitations}
+
+\begin{enumerate}
+    \item \textbf{Dense--dense bridges}: two community cores can both have high $d^{\mathrm{rev}}$. Schemes~1--2 alone may assign large $\tau$ to inter-community bridges; mutual-KNN (Scheme~4) or density-similarity (Scheme~3) mitigates this.
+    \item \textbf{Dependence on $k$}: larger KNN $k$ shifts all $d^{\mathrm{rev}}$ upward; prefer quantile or $d_{\max}$ normalization over raw counts.
+    \item \textbf{Dynamic rewiring}: $d^{\mathrm{rev}}$ changes when KNN is rebuilt each step; refresh $\tau_{ij}$ accordingly.
+    \item \textbf{Fixed non-KNN graphs} (e.g., citation networks): reverse-degree asymmetry is absent; use Jaccard, community detection, or feature distance instead.
+\end{enumerate}
+
+\section{Practical Default}
+
+A strong starting formula:
+\begin{equation}
+    \tau_{ij} = \tau_{\max}\cdot \mathbb{1}[i \in \mathrm{KNN}(j)]\cdot \exp\!\left(-\frac{\bigl|d^{\mathrm{rev}}_i - d^{\mathrm{rev}}_j\bigr|^2}{T}\right),
+\end{equation}
+with $\tau_{\max} \in [0.3, 0.5]$ and $T$ set to one or two times the variance of $\{d^{\mathrm{rev}}_i\}$. Success is indicated when intra-community embedding similarity rises quickly while inter-community similarity remains comparatively low.
+
+%==============================================================================
+\chapter{Summary}
+%==============================================================================
+
+DGAD diffusion produces \textbf{local} and \textbf{global equilibrium effects} at two complementary levels:
+\begin{enumerate}
+    \item \textbf{Hop scale}: one-hop neighbor mixing vs.\ multi-hop graph-wide harmonization;
+    \item \textbf{Community scale}: fast intra-community consensus vs.\ slow inter-community coupling on structured graphs.
+\end{enumerate}
+
+For community separation, favor settings where local equilibria have formed inside communities but global equilibration across communities is still incomplete. Global knobs ($K$, $\tau$) provide coarse control; \textbf{per-edge $\tau_{ij}$} provides fine control---assigning large rates to homophilous, dense, mutual-KNN edges and small rates to sparse, asymmetric, or bridge-like edges.
+
+On KNN graphs, fixed in-degree and variable reverse degree offer a particularly natural, label-free signal: \emph{popularity as a neighbor} proxies local feature density and can be turned directly into a heterogenous diffusion schedule that promotes local equilibrium while retarding global equilibrium.
+
+\end{document}
